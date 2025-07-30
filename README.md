@@ -21,25 +21,25 @@
 
 ```mermaid
 graph TD
-    subgraph "User Interaction"
-        User[User] -- "1. POST /api/analyze" --> APIServer(API Server)
-        User -- "4. GET /api/results/{task_id}" --> APIServer
-    end
+  %% ---------- User interaction ----------
+  subgraph User_Interaction
+    direction LR
+    User[User]
+    ApiSrv[API&nbsp;Server]
+    User -- "POST /api/analyze" --> ApiSrv
+    User -- "GET /api/results/:task_id" --> ApiSrv
+  end
 
-    subgraph "System Components"
-        APIServer -- "2. Publish Task" --> NATS[NATS Message Queue]
-        NATS -- "3. Subscribe to Task" --> Analyzer(Analyzer Service)
-        Analyzer -- "5. Fetch Data" --> GitHub(GitHub API)
-        Analyzer -- "6. Store Results" --> MongoDB[(MongoDB)]
-        APIServer -- "7. Query Results" --> MongoDB
-    end
+  %% ---------- System components ----------
+  subgraph System_Components
+    ApiSrv -- "Publish task" --> NATS[NATS&nbsp;MQ]
+    NATS -- "Subscribe task" --> Analyzer[Analyzer&nbsp;Service]
+    Analyzer -- "Fetch data" --> GitHub[(GitHub&nbsp;API)]
+    Analyzer -- "Store results" --> MongoDB[(MongoDB)]
+    ApiSrv -- "Query results" --> MongoDB
+  end
 
-    style User fill:#f9f,stroke:#333,stroke-width:2px
-    style APIServer fill:#bbf,stroke:#333,stroke-width:2px
-    style Analyzer fill:#bbf,stroke:#333,stroke-width:2px
-    style NATS fill:#f96,stroke:#333,stroke-width:2px
-    style MongoDB fill:#9f9,stroke:#333,stroke-width:2px
-    style GitHub fill:#ccc,stroke:#333,stroke-width:2px
+
 ```
 
 ## 本地部署 (使用 Docker Compose)
