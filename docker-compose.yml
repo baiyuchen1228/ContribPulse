@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  nats:
+    image: nats:2.9
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command: "-D -V"
+    networks:
+      - contrib-net
+
+  mongo:
+    image: mongo:5.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - contrib-net
+
+  api-server:
+    build:
+      context: .
+      dockerfile: cmd/api-server/Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      - nats
+      - mongo
+    networks:
+      - contrib-net
+
+  analyzer-service:
+    build:
+      context: .
+      dockerfile: cmd/analyzer-service/Dockerfile
+    depends_on:
+      - nats
+      - mongo
+    networks:
+      - contrib-net
+
+volumes:
+  mongo-data:
+
+networks:
+  contrib-net:
