@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analyzer-service
+  labels:
+    app: analyzer-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: analyzer-service
+  template:
+    metadata:
+      labels:
+        app: analyzer-service
+    spec:
+      containers:
+      - name: analyzer-service
+        image: baibaiouo/contribpulse-analyzer-service:latest
+        env:
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-token-secret
+              key: GITHUB_TOKEN
