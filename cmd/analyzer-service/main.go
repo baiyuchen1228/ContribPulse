@@ -24,16 +24,19 @@ type AnalysisTask struct {
 	RepoURL string `json:"repo_url"`
 }
 
-type Contributor struct {
-	Login string
-	Count int
+type ContributorStats struct {
+	Login        string
+	Commits      int
+	PullRequests int
+	Issues       int
+	Total        int
 }
 
-type ByCount []Contributor
+type ByTotal []*ContributorStats
 
-func (a ByCount) Len() int           { return len(a) }
-func (a ByCount) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a ByCount) Less(i, j int) bool { return a[i].Count > a[j].Count } // Descending order
+func (a ByTotal) Len() int           { return len(a) }
+func (a ByTotal) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a ByTotal) Less(i, j int) bool { return a[i].Total > a[j].Total } // Descending order
 
 func main() {
 	// Connect to NATS
@@ -98,10 +101,18 @@ func messageHandler(mongoClient *mongo.Client) nats.MsgHandler {
 		owner := pathParts[1]
 		repoName := strings.TrimSuffix(pathParts[2], ".git")
 
-		contributorCounts := make(map[string]int)
+		contributorStats := make(map[string]*ContributorStats)
 		totalCommits := 0
 		totalPRs := 0
 		totalIssues := 0
+
+		// Helper function to get or create a contributor stats entry
+		getStats := func(login string) *ContributorStats {
+			if _, ok := contributorStats[login]; !ok {
+				contributorStats[login] = &ContributorStats{Login: login}
+			}
+			return contributorStats[login]
+		}
 
 		// Fetch all commits and count contributors
 		optCommits := &github.CommitsListOptions{ListOptions: github.ListOptions{PerPage: 100}}
@@ -113,12 +124,17 @@ func messageHandler(mongoClient *mongo.Client) nats.MsgHandler {
 			}
 			totalCommits += len(commits)
 			for _, commit := range commits {
+				var login string
 				if commit.Author != nil && commit.Author.Login != nil {
-					contributorCounts[*commit.Author.Login]++
+					login = *commit.Author.Login
 				} else if commit.Commit != nil && commit.Commit.Author != nil && commit.Commit.Author.Email != nil {
-					// Fallback to email if login is not available (e.g., for old commits or deleted accounts)
-					contributorCounts[*commit.Commit.Author.Email]++
+					login = *commit.Commit.Author.Email
+				} else {
+					continue
 				}
+				stats := getStats(login)
+				stats.Commits++
+				stats.Total++
 			}
 			if resp.NextPage == 0 {
 				break
@@ -137,7 +153,9 @@ func messageHandler(mongoClient *mongo.Client) nats.MsgHandler {
 			totalPRs += len(prs)
 			for _, pr := range prs {
 				if pr.User != nil && pr.User.Login != nil {
-					contributorCounts[*pr.User.Login]++
+					stats := getStats(*pr.User.Login)
+					stats.PullRequests++
+					stats.Total++
 				}
 			}
 			if resp.NextPage == 0 {
@@ -157,7 +175,9 @@ func messageHandler(mongoClient *mongo.Client) nats.MsgHandler {
 			totalIssues += len(issues)
 			for _, issue := range issues {
 				if issue.User != nil && issue.User.Login != nil {
-					contributorCounts[*issue.User.Login]++
+					stats := getStats(*issue.User.Login)
+					stats.Issues++
+					stats.Total++
 				}
 			}
 			if resp.NextPage == 0 {
@@ -167,18 +187,22 @@ func messageHandler(mongoClient *mongo.Client) nats.MsgHandler {
 		}
 
 		// Get top 10 contributors
-		var contributors []Contributor
-		for login, count := range contributorCounts {
-			contributors = append(contributors, Contributor{Login: login, Count: count})
+		var sortedContributors []*ContributorStats
+		for _, stats := range contributorStats {
+			sortedContributors = append(sortedContributors, stats)
 		}
-		sort.Sort(ByCount(contributors))
+		sort.Sort(ByTotal(sortedContributors))
 
-		topContributors := []string{}
-		for i, c := range contributors {
+		var topContributorsForJSON []map[string]interface{}
+		for i, c := range sortedContributors {
 			if i >= 10 {
 				break
 			}
-			topContributors = append(topContributors, c.Login)
+			contributorData := map[string]interface{}{
+				"user":   c.Login,
+				"commits": c.Commits,
+			}
+			topContributorsForJSON = append(topContributorsForJSON, contributorData)
 		}
 
 		result := map[string]interface{}{
@@ -189,12 +213,12 @@ func messageHandler(mongoClient *mongo.Client) nats.MsgHandler {
 				"total_commits":   totalCommits,
 				"total_issues":    totalIssues,
 				"total_prs":       totalPRs,
-				"top_contributors": topContributors,
+				"top_contributors": topContributorsForJSON,
 			},
 		}
 
 		collection := mongoClient.Database("contrib_pulse").Collection("analysis_results")
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second) // Increased timeout for larger repos
 		defer cancel()
 
 		_, err = collection.InsertOne(ctx, result)
@@ -206,4 +230,3 @@ func messageHandler(mongoClient *mongo.Client) nats.MsgHandler {
 		log.Printf("Successfully processed and stored result for task %s", task.TaskID)
 	}
 }
-

@@ -31,13 +31,40 @@
     ```
 
 3.  **測試 API**:
-    *   **發送分析請求**:
+    *   **發送分析請求** (請將 `<https://github.com/owner/repo>` 替換為想查詢的公開專案):
         ```bash
-        curl -X POST -H "Content-Type: application/json" -d '{"repo_url": "https://github.com/owner/repo"}' http://localhost:8080/api/analyze
+        curl -X POST -H "Content-Type: application/json" -d '{"repo_url": "<https://github.com/owner/repo>"}' http://localhost:8080/api/analyze
         ```
     *   **查詢分析結果** (請將 `<task_id>` 替換為上一步回傳的 ID):
         ```bash
         curl http://localhost:8080/api/results/<task_id>
+        ```
+    *   **成果範例**:
+        ```json
+        {
+            "processed_at": "2025-07-30T08:33:09.626Z",
+            "repo_url": "https://github.com/baiyuchen1228/baiyuchen1228.github.io",
+            "summary": {
+                "top_contributors": [
+                    {
+                        "commits": 271,
+                        "login": "baiyuchen1228"
+                    },
+                    {
+                        "commits": 200,
+                        "login": "forward0606"
+                    },
+                    {
+                        "commits": 13,
+                        "login": "dependabot[bot]"
+                    }
+                ],
+                "total_commits": 484,
+                "total_issues": 27,
+                "total_prs": 27
+            },
+            "task_id": "2bea743a-dd09-466a-9f60-edb0c6d66879"
+        }
         ```
 
 4.  **停止服務**:
