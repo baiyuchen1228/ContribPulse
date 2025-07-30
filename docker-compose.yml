@@ -30,6 +30,8 @@ services:
       - mongo
     networks:
       - contrib-net
+    env_file:
+      - .env
 
   analyzer-service:
     build:
@@ -40,6 +42,10 @@ services:
       - mongo
     networks:
       - contrib-net
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+    env_file:
+      - .env
 
 volumes:
   mongo-data:
